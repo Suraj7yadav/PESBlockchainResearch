@@ -1,0 +1,150 @@
+#!/usr/bin/python
+import re
+import sys
+import matplotlib.pyplot as plt
+import numpy as np
+
+def plotGraph():
+	inp = raw_input('Enter the UB')
+	plt.xlabel('Hours')
+	plt.ylabel('Response Times')
+	plt.title('Hourly Response Time Graph for UB'+ str(inp))
+	plt.plot([x for x in range(0,24)],hourlyResponseTimes[int(inp)], 'b')
+	plt.tight_layout()
+	plt.show()
+
+def plotUserResponse():
+	objects = ['UB'+str(i+1) for i in range(len(userBaseResponseTime))]
+	y_pos = np.arange(len(objects))
+	plt.bar(y_pos, userBaseResponseTime, align='edge', alpha=1.0)
+	plt.xticks(y_pos, objects)
+	plt.xlabel('User Bases')
+	plt.ylabel('User Base mean Response Times')
+	plt.title('Mean Response Time per UB')
+	plt.legend()
+	plt.tight_layout()
+	plt.show()
+	
+def plotServiceTime():
+	objects = ['DC'+str(i+1) for i in range(len(serviceTimes))]
+	y_pos = np.arange(len(objects))
+	plt.bar(y_pos, serviceTimes, align='edge', alpha=1.0)
+	plt.xticks(y_pos, objects)
+	plt.xlabel('Data Centres')
+	plt.ylabel('DataCenter Mean Service Times')
+	plt.title('Mean Service Time per DC')
+	plt.legend()
+	plt.tight_layout()
+	plt.show()
+
+def errhandler():
+    print "Exiting :(\n"
+    sys.exit()
+
+def drawGraph():
+	takeaction = {
+        "1": plotGraph,
+        "2": plotUserResponse,
+        "3": plotServiceTime
+    }
+	print '\nGenerate Graph:'
+	print '1. Hourly Response Time Graph'
+	print '2. Mean Response Time per UB'
+	print '3. Mean Service Time per UB'
+	print '4. Exit'
+	input = raw_input()
+	takeaction.get(input,errhandler)()
+
+def main():
+	sim_file = open('../cloud_analyst/jars/sim_report')
+	caseFileName = raw_input('Enter the case file name: ')
+	caseFileName = '../Simulation_Files/' + caseFileName 
+	caseFile = open(caseFileName)
+
+	totalUsers = int(raw_input('Enter the no. of users: '))
+
+	'''Below code retrieves the service time
+	   from the sim_report file for each 
+	   datacenter
+	'''
+	userBaseRegion = []
+	dataCenterRegion = []
+	count = 0
+	i = 0
+	global hourlyResponseTimes,serviceTimes,userBaseResponseTime
+	hourlyResponseTimes = []
+	userBaseResponseTime = []
+	serviceTimes = []
+	userList = []
+
+	with sim_file as myFile:
+		for num, line in enumerate(myFile, 1):
+			if 'Service time' in line:
+				myFile.next()
+				stime = re.findall("\d+\.\d+", myFile.next())
+				serviceTimes.append(float(stime[0]))
+			if 'UB Response time' in line:
+				myFile.next()
+				stime = re.findall("\d+\.\d+", myFile.next())
+				userBaseResponseTime.append(float(stime[0]))
+			if 'Hourly Response Time' in line:
+				myFile.next()
+				stime = re.findall("\d+\.\d+", myFile.next())
+				count += 1
+				userList.append(float(stime[0]))
+				if(count == 24):
+					count = 0
+					i += 1
+					hourlyResponseTimes.append(userList)
+					userList= []
+					
+			
+	#print 'Service Times ',serviceTimes,'\nUB Response Times',userBaseResponseTime,'\nHourly Response Times',hourlyResponseTimes 
+
+	''' It retrieves the region of each
+		userbase and DC from case file
+	'''
+
+	with caseFile as myFile:
+		for num, line in enumerate(myFile, 1):
+			if '<string>UB' in line:
+				for i in range(13):
+					myFile.next()
+				if '<void property="region">' in myFile.next():
+					stime = re.findall("\d+", myFile.next())
+					userBaseRegion.append(int(stime[0]))				
+				else:
+					userBaseRegion.append(int(0))
+
+			if '<string>DC' in line:
+				for i in range(4):
+					myFile.next()
+				if '<void property="region">' in myFile.next():
+					stime = re.findall("\d+", myFile.next())
+					dataCenterRegion.append(int(stime[0]))				
+				else:
+					dataCenterRegion.append(int(0))
+
+	#print userBaseRegion,dataCenterRegion
+
+	''' Implements the algorithm and
+		prints best datacenter for 
+		each user
+	'''
+
+	for userID in range(totalUsers):
+		if dataCenterRegion.count(userBaseRegion[userID]) > 1:
+			indices = [serviceTimes[Index] for Index, x in enumerate(dataCenterRegion) if x == userBaseRegion[userID]]
+			minServiceTime = min(i for i in indices if i > 0)
+			print 'The best datacenter for UB',userID+1,'is ','DC',serviceTimes.index(minServiceTime)+1
+		else:
+			if dataCenterRegion.count(userBaseRegion[userID]) == 0:
+				print 'The best datacenter for UB'+str(userID+1),'is ','DC'+str(serviceTimes.index(min(i for i in serviceTimes if i > 0))+1)
+		
+			else:
+				print 'The best datacenter for UB',userID+1,'is ','DC',dataCenterRegion.index(userBaseRegion[userID])+1
+
+if __name__ == '__main__':
+	main()
+	while True:
+		drawGraph()
